@@ -45,8 +45,7 @@ The application allows users to:
 
 🚀 **Try the application here:**
 
-**https://usedcarpriceprediction-sdjdld72bg8vc4u8wdnpva.streamlit.app/**
-
+**https://usedcarpriceprediction-7lqyymjljbrormuyxcw99n.streamlit.app/**
 ---
 
 
