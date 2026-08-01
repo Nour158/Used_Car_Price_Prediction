@@ -11,8 +11,8 @@ import streamlit as st
 # =========================================================
 
 st.set_page_config(
-    page_title="Egypt CarValue",
-    page_icon="🚗",
+    page_title="CarValue Egypt",
+    page_icon="🚘",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -108,8 +108,8 @@ def predict_price(input_data):
     input_df = pd.DataFrame([input_data])
     input_df = input_df.reindex(columns=feature_columns)
 
-    encoded = preprocessor.transform(input_df)
-    predicted_log_price = model.predict(encoded)[0]
+    transformed = preprocessor.transform(input_df)
+    predicted_log_price = model.predict(transformed)[0]
     predicted_price = float(np.expm1(predicted_log_price))
 
     if not np.isfinite(predicted_price) or predicted_price <= 0:
@@ -126,174 +126,175 @@ st.markdown(
     """
     <style>
     .stApp {
-        background:
-            linear-gradient(180deg, #f8f1e7 0%, #f4eadc 100%);
-        color: #1f1f1f;
+        background: #f6f8fb;
+        color: #1d2735;
     }
 
     .block-container {
-        max-width: 1500px;
-        padding-top: 1rem;
+        max-width: 1480px;
+        padding-top: 1.1rem;
         padding-bottom: 2.5rem;
     }
 
     .hero {
-        background:
-            linear-gradient(135deg, rgba(182,32,37,0.96), rgba(125,18,22,0.96)),
-            url("https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=1600&q=80");
-        background-size: cover;
-        background-position: center;
-        border-radius: 28px;
-        padding: 2rem 2.2rem;
-        color: white;
-        box-shadow: 0 18px 45px rgba(81, 31, 20, 0.22);
+        background: linear-gradient(135deg, #ffffff 0%, #eef4f8 100%);
+        border: 1px solid #dfe7ee;
+        border-radius: 26px;
+        padding: 1.7rem 1.9rem;
+        box-shadow: 0 16px 40px rgba(41, 57, 75, 0.08);
         margin-bottom: 1.2rem;
     }
 
-    .hero-kicker {
-        font-size: 0.84rem;
-        font-weight: 800;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: #f3d99c;
-        margin-bottom: 0.4rem;
-    }
-
     .hero-title {
-        font-size: 3rem;
+        font-size: 2.7rem;
         font-weight: 900;
         letter-spacing: -0.04em;
+        color: #15324b;
         margin-bottom: 0.25rem;
     }
 
     .hero-subtitle {
-        color: #ffe9e9;
-        font-size: 1.05rem;
+        color: #667789;
+        font-size: 1.02rem;
     }
 
-    .egypt-strip {
-        display: flex;
-        gap: 0;
-        width: 100%;
-        height: 7px;
-        border-radius: 99px;
-        overflow: hidden;
-        margin: 1rem 0 1.4rem;
-    }
-
-    .egypt-strip span {
-        flex: 1;
-    }
-
-    .red { background: #ce1126; }
-    .white { background: #ffffff; }
-    .black { background: #000000; }
-
-    .step-card {
-        background: rgba(255,255,255,0.88);
-        border: 1px solid #e7d8c4;
-        border-radius: 22px;
-        padding: 1.2rem 1.25rem;
-        box-shadow: 0 10px 26px rgba(87, 60, 33, 0.08);
-        margin-bottom: 1rem;
-    }
-
-    .step-title {
-        color: #8f1d22;
-        font-size: 1.05rem;
+    .section-title {
+        color: #15324b;
+        font-size: 1.15rem;
         font-weight: 850;
-        margin-bottom: 0.75rem;
+        margin-bottom: 0.8rem;
     }
 
-    .market-card {
-        background: #1d6f8a;
-        color: white;
-        border-radius: 20px;
-        padding: 1rem 1.1rem;
-        box-shadow: 0 12px 28px rgba(29,111,138,0.18);
+    .panel {
+        background: white;
+        border: 1px solid #e1e8ef;
+        border-radius: 22px;
+        padding: 1.2rem;
+        box-shadow: 0 10px 28px rgba(41, 57, 75, 0.06);
+    }
+
+    .summary-card {
+        background: #ffffff;
+        border: 1px solid #e1e8ef;
+        border-radius: 18px;
+        padding: 1rem 1.05rem;
+        box-shadow: 0 8px 20px rgba(41, 57, 75, 0.05);
         height: 100%;
     }
 
-    .market-label {
+    .summary-label {
+        color: #7a8a9a;
         font-size: 0.78rem;
+        font-weight: 750;
         text-transform: uppercase;
         letter-spacing: 0.08em;
-        color: #d4edf5;
     }
 
-    .market-value {
+    .summary-value {
+        color: #15324b;
         font-size: 1.35rem;
         font-weight: 850;
         margin-top: 0.25rem;
     }
 
-    .result-wrap {
-        background: linear-gradient(135deg, #fffdf9, #f6ead7);
-        border: 1px solid #d9c6a6;
-        border-radius: 28px;
-        padding: 1.6rem;
-        box-shadow: 0 16px 40px rgba(87, 60, 33, 0.12);
-        margin-top: 1rem;
+    .result-shell {
+        background: white;
+        border: 1px solid #dfe7ee;
+        border-radius: 24px;
+        padding: 1.35rem;
+        box-shadow: 0 14px 34px rgba(41, 57, 75, 0.08);
     }
 
     .price-card {
-        background: linear-gradient(135deg, #1f1f1f, #3a3a3a);
+        background: linear-gradient(135deg, #163b5b 0%, #205d7b 100%);
         color: white;
-        border-radius: 24px;
-        padding: 1.8rem;
-        text-align: center;
+        border-radius: 22px;
+        padding: 1.7rem;
+        text-align: left;
     }
 
     .price-label {
-        color: #e8d8b2;
-        font-size: 0.86rem;
+        color: #cfe2ec;
+        font-size: 0.82rem;
         text-transform: uppercase;
-        letter-spacing: 0.12em;
+        letter-spacing: 0.1em;
+        font-weight: 750;
     }
 
     .price-value {
-        font-size: 3.4rem;
+        font-size: 3rem;
         font-weight: 900;
-        margin: 0.4rem 0;
+        margin: 0.35rem 0 0.5rem;
     }
 
     .price-range {
-        color: #e8e8e8;
-        font-size: 1rem;
+        color: #e3edf3;
+        font-size: 0.98rem;
     }
 
-    .tip-card {
-        background: #fff8ec;
-        border: 1px solid #e8d3ad;
-        border-radius: 18px;
-        padding: 1rem 1.1rem;
+    .detail-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.7rem;
+        margin-top: 1rem;
+    }
+
+    .detail-item {
+        background: #f8fafc;
+        border: 1px solid #e3e9ef;
+        border-radius: 14px;
+        padding: 0.85rem;
+    }
+
+    .detail-label {
+        color: #7b8b9b;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        font-weight: 750;
+    }
+
+    .detail-value {
+        color: #1d3348;
+        font-size: 1rem;
+        font-weight: 800;
+        margin-top: 0.2rem;
+    }
+
+    .empty-result {
+        background: white;
+        border: 1px dashed #cbd6df;
+        border-radius: 22px;
+        padding: 2rem 1.4rem;
+        text-align: center;
+        color: #6f7f8f;
     }
 
     div[data-testid="stFormSubmitButton"] button,
     div[data-testid="stButton"] button {
         width: 100% !important;
-        min-height: 3.2rem !important;
-        border-radius: 14px !important;
-        border: 1px solid #b62025 !important;
-        background: #b62025 !important;
-        color: white !important;
+        min-height: 3.15rem !important;
+        border-radius: 13px !important;
+        border: 1px solid #1d5f7d !important;
+        background: #1d5f7d !important;
+        color: #ffffff !important;
         font-size: 1rem !important;
-        font-weight: 850 !important;
+        font-weight: 800 !important;
     }
 
     div[data-testid="stFormSubmitButton"] button *,
     div[data-testid="stButton"] button * {
-        color: white !important;
+        color: #ffffff !important;
     }
 
     div[data-testid="stFormSubmitButton"] button:hover,
     div[data-testid="stButton"] button:hover {
-        background: #8f1d22 !important;
-        border-color: #8f1d22 !important;
+        background: #174d66 !important;
+        border-color: #174d66 !important;
     }
 
     [data-testid="stWidgetLabel"] {
-        color: #2d2a26 !important;
+        color: #24384c !important;
         font-weight: 750 !important;
     }
     </style>
@@ -309,17 +310,10 @@ st.markdown(
 st.markdown(
     """
     <div class="hero">
-        <div class="hero-kicker">Egyptian Used-Car Market</div>
-        <div class="hero-title">🚗 Egypt CarValue</div>
+        <div class="hero-title">🚘 CarValue Egypt</div>
         <div class="hero-subtitle">
-            سعّر عربيتك بسهولة — get an estimated Egyptian market price in seconds.
+            Estimate the market value of a used car in Egypt using a tuned XGBoost model.
         </div>
-    </div>
-
-    <div class="egypt-strip">
-        <span class="red"></span>
-        <span class="white"></span>
-        <span class="black"></span>
     </div>
     """,
     unsafe_allow_html=True,
@@ -327,25 +321,25 @@ st.markdown(
 
 
 # =========================================================
-# Market snapshot row
+# Quick model summary
 # =========================================================
 
 s1, s2, s3, s4 = st.columns(4)
 
-snapshot_items = [
+summary_items = [
     ("Model", "Tuned XGBoost"),
     ("R² Score", "0.8333"),
     ("Average Error", "≈ 119K EGP"),
     ("Market", "Egypt"),
 ]
 
-for column, (label, value) in zip([s1, s2, s3, s4], snapshot_items):
+for column, (label, value) in zip([s1, s2, s3, s4], summary_items):
     with column:
         st.markdown(
             f"""
-            <div class="market-card">
-                <div class="market-label">{label}</div>
-                <div class="market-value">{value}</div>
+            <div class="summary-card">
+                <div class="summary-label">{label}</div>
+                <div class="summary-value">{value}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -355,7 +349,7 @@ st.write("")
 
 
 # =========================================================
-# Input sections
+# Main workspace
 # =========================================================
 
 companies = clean_options(
@@ -379,28 +373,26 @@ locations = clean_options(
     ["Cairo", "Alexandria", "Giza", "6 October"],
 )
 
-st.markdown(
-    '<div class="step-title">1. Choose the car</div>',
-    unsafe_allow_html=True,
-)
+selection_col, options_col = st.columns([1.15, 1], gap="large")
 
-c1, c2, c3 = st.columns(3)
+with selection_col:
+    st.markdown(
+        '<div class="section-title">Vehicle Selection</div>',
+        unsafe_allow_html=True,
+    )
 
-with c1:
     company = st.selectbox(
         "Company",
         companies,
         key="company_selector",
     )
 
-with c2:
     car_model = st.selectbox(
         "Model",
         models_for_company(company),
         key=f"model_selector_{company}",
     )
 
-with c3:
     year = st.number_input(
         "Manufacturing Year",
         min_value=1972,
@@ -409,76 +401,98 @@ with c3:
         step=1,
     )
 
-with st.form("car_valuation_form"):
+with options_col:
     st.markdown(
-        '<div class="step-title">2. Add usage and market details</div>',
+        '<div class="section-title">Market Details</div>',
         unsafe_allow_html=True,
     )
 
-    u1, u2, u3 = st.columns(3)
+    mileage = st.number_input(
+        "Mileage (km)",
+        min_value=0,
+        max_value=1_000_000,
+        value=80_000,
+        step=5_000,
+    )
 
-    with u1:
-        mileage = st.number_input(
-            "Mileage (km)",
-            min_value=0,
-            max_value=1_000_000,
-            value=80_000,
-            step=5_000,
-        )
+    color = st.selectbox(
+        "Color",
+        colors,
+    )
 
-    with u2:
-        color = st.selectbox(
-            "Color",
-            colors,
-        )
+    location = st.selectbox(
+        "Location",
+        locations,
+    )
 
-    with u3:
-        location = st.selectbox(
-            "Location",
-            locations,
-        )
+st.write("")
 
+with st.form("car_features_form"):
     st.markdown(
-        '<div class="step-title">3. Select transmission and features</div>',
+        '<div class="section-title">Transmission and Features</div>',
         unsafe_allow_html=True,
     )
 
-    transmission = st.radio(
-        "Transmission",
-        ["Automatic", "Manual", "Unknown"],
-        horizontal=True,
-    )
+    transmission_col, features_col = st.columns([1, 1.5], gap="large")
 
-    f1, f2, f3 = st.columns(3)
-
-    with f1:
-        air_conditioner = st.checkbox(
-            "Air Conditioner",
-            value=True,
+    with transmission_col:
+        transmission = st.radio(
+            "Transmission",
+            ["Automatic", "Manual", "Unknown"],
+            horizontal=False,
         )
 
-    with f2:
-        power_steering = st.checkbox(
-            "Power Steering",
-            value=True,
-        )
+    with features_col:
+        f1, f2, f3 = st.columns(3)
 
-    with f3:
-        remote_control = st.checkbox(
-            "Remote Control",
-            value=True,
-        )
+        with f1:
+            air_conditioner = st.checkbox(
+                "Air Conditioner",
+                value=True,
+            )
+
+        with f2:
+            power_steering = st.checkbox(
+                "Power Steering",
+                value=True,
+            )
+
+        with f3:
+            remote_control = st.checkbox(
+                "Remote Control",
+                value=True,
+            )
 
     submitted = st.form_submit_button(
-        "Calculate Egyptian Market Price"
+        "Estimate Market Value"
     )
 
 
 # =========================================================
-# Prediction result
+# Result area
 # =========================================================
 
-if submitted:
+st.write("")
+st.markdown(
+    '<div class="section-title">Valuation Result</div>',
+    unsafe_allow_html=True,
+)
+
+if not submitted:
+    st.markdown(
+        """
+        <div class="empty-result">
+            <h3>Ready when you are</h3>
+            <p>
+                Enter the car details above, then click
+                <b>Estimate Market Value</b>.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+else:
     car_age = max(0, 2026 - int(year))
 
     input_data = {
@@ -503,14 +517,9 @@ if submitted:
         lower = max(0, estimate - mae)
         upper = estimate + mae
 
-        st.markdown(
-            '<div class="result-wrap">',
-            unsafe_allow_html=True,
-        )
+        result_left, result_right = st.columns([1.2, 1], gap="large")
 
-        left_result, right_result = st.columns([1.15, 1])
-
-        with left_result:
+        with result_left:
             st.markdown(
                 f"""
                 <div class="price-card">
@@ -524,29 +533,50 @@ if submitted:
                 unsafe_allow_html=True,
             )
 
-        with right_result:
+        with result_right:
             st.markdown(
                 f"""
-                <div class="tip-card">
-                    <h3>Vehicle Summary</h3>
-                    <p><b>Car:</b> {company} {car_model}</p>
-                    <p><b>Year:</b> {int(year)}</p>
-                    <p><b>Age:</b> {car_age} years</p>
-                    <p><b>Mileage:</b> {int(mileage):,} km</p>
-                    <p><b>Transmission:</b> {transmission}</p>
-                    <p><b>Location:</b> {location}</p>
+                <div class="result-shell">
+                    <div class="section-title">Vehicle Summary</div>
+
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <div class="detail-label">Vehicle</div>
+                            <div class="detail-value">{company} {car_model}</div>
+                        </div>
+
+                        <div class="detail-item">
+                            <div class="detail-label">Year</div>
+                            <div class="detail-value">{int(year)}</div>
+                        </div>
+
+                        <div class="detail-item">
+                            <div class="detail-label">Mileage</div>
+                            <div class="detail-value">{int(mileage):,} km</div>
+                        </div>
+
+                        <div class="detail-item">
+                            <div class="detail-label">Transmission</div>
+                            <div class="detail-value">{transmission}</div>
+                        </div>
+
+                        <div class="detail-item">
+                            <div class="detail-label">Location</div>
+                            <div class="detail-value">{location}</div>
+                        </div>
+
+                        <div class="detail-item">
+                            <div class="detail-label">Car Age</div>
+                            <div class="detail-value">{car_age} years</div>
+                        </div>
+                    </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
-        st.markdown(
-            '</div>',
-            unsafe_allow_html=True,
-        )
-
         st.info(
-            "The final market price may vary because trim level, engine size, "
+            "The actual market price may differ because trim level, engine size, "
             "condition, accident history, service history, and ownership history "
             "are not available in the dataset."
         )
@@ -567,16 +597,28 @@ if submitted:
 
 st.divider()
 
-st.markdown(
-    """
-### About this estimator
+with st.expander("About this Project"):
+    st.markdown(
+        """
+### Final Model
 
-Egypt CarValue was trained on Egyptian used-car listings and compares several
-regression models. The tuned XGBoost model achieved the strongest performance
-and is used for the final market estimate.
+- Tuned XGBoost Regressor
+- Test R²: **0.8333**
+- MAE: **119,246 EGP**
+- RMSE: **385,681 EGP**
+
+### Inputs Used
+
+- Company and model
+- Manufacturing year
+- Mileage
+- Color
+- Transmission
+- Location
+- Selected equipment
 """
-)
+    )
 
 st.caption(
-    "© 2026 Egypt CarValue | Egyptian Used-Car Price Prediction"
+    "© 2026 CarValue Egypt | Used Car Price Prediction"
 )
