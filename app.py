@@ -1,3 +1,4 @@
+
 from pathlib import Path
 
 import joblib
@@ -5,11 +6,12 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+
 st.set_page_config(
     page_title="CarValue Egypt",
     page_icon="🚘",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -20,110 +22,36 @@ MODEL_PATH = MODEL_DIR / "best_xgboost.pkl"
 PREPROCESSOR_PATH = MODEL_DIR / "preprocessor.pkl"
 FEATURE_COLUMNS_PATH = MODEL_DIR / "feature_columns.pkl"
 
-st.markdown(
-    '''
-    <style>
-    .stApp {
-        background: linear-gradient(180deg, #07131f 0%, #0c1e2d 100%);
-        color: #f4f7fb;
-    }
-
-    [data-testid="stSidebar"] {
-        background: #081621;
-        border-right: 1px solid rgba(255,255,255,0.08);
-    }
-
-    .main-title {
-        font-size: 3rem;
-        font-weight: 800;
-        letter-spacing: -0.04em;
-        margin-bottom: 0.2rem;
-    }
-
-    .subtitle {
-        color: #b7c6d5;
-        font-size: 1.05rem;
-        margin-bottom: 1.4rem;
-    }
-
-    .hero-card {
-        padding: 1.4rem 1.5rem;
-        border-radius: 22px;
-        background: linear-gradient(135deg, rgba(28,115,165,0.30), rgba(7,26,39,0.78));
-        border: 1px solid rgba(255,255,255,0.10);
-        margin-bottom: 1rem;
-    }
-
-    .result-card {
-        padding: 2rem;
-        border-radius: 24px;
-        background: linear-gradient(135deg, #0d5d83, #12354b);
-        border: 1px solid rgba(255,255,255,0.14);
-        text-align: center;
-    }
-
-    .result-label {
-        color: #c7dce9;
-        font-size: 0.95rem;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-    }
-
-    .result-price {
-        color: white;
-        font-size: 3rem;
-        font-weight: 800;
-        margin: 0.4rem 0;
-    }
-
-    .result-range {
-        color: #dceaf2;
-    }
-
-    div.stButton > button {
-        width: 100%;
-        border-radius: 14px;
-        min-height: 3.2rem;
-        font-size: 1.05rem;
-        font-weight: 700;
-        background: linear-gradient(90deg, #1a8dbf, #126f99);
-        color: white;
-        border: none;
-    }
-    </style>
-    ''',
-    unsafe_allow_html=True,
-)
 
 @st.cache_resource
 def load_artifacts():
-    required = [MODEL_PATH, PREPROCESSOR_PATH, FEATURE_COLUMNS_PATH]
-    missing = [path.name for path in required if not path.exists()]
-
+    missing = [
+        p.name
+        for p in [MODEL_PATH, PREPROCESSOR_PATH, FEATURE_COLUMNS_PATH]
+        if not p.exists()
+    ]
     if missing:
         raise FileNotFoundError(
-            "Missing model files: "
-            + ", ".join(missing)
-            + ". Place them inside the root models folder."
+            "Missing model files: " + ", ".join(missing)
         )
 
-    model = joblib.load(MODEL_PATH)
-    preprocessor = joblib.load(PREPROCESSOR_PATH)
-    feature_columns = joblib.load(FEATURE_COLUMNS_PATH)
-
-    return model, preprocessor, feature_columns
+    return (
+        joblib.load(MODEL_PATH),
+        joblib.load(PREPROCESSOR_PATH),
+        joblib.load(FEATURE_COLUMNS_PATH),
+    )
 
 
 @st.cache_data
-def load_dataset():
+def load_data():
     if not DATA_PATH.exists():
         return None
 
     df = pd.read_csv(DATA_PATH)
 
-    for column in ["company", "model", "color", "location"]:
-        if column in df.columns:
-            df[column] = df[column].astype("string").str.strip()
+    for col in ["company", "model", "color", "location"]:
+        if col in df.columns:
+            df[col] = df[col].astype("string").str.strip()
 
     return df
 
@@ -134,38 +62,21 @@ def clean_options(series, fallback):
 
     values = pd.Series(series).dropna().astype(str).str.strip()
     values = values[values.ne("")]
-
     result = sorted(values.unique().tolist())
+
     return result or fallback
 
 
-def models_for_company(company_name):
-    if raw_df is None or not {"company", "model"}.issubset(raw_df.columns):
-        return ["Elantra", "Corolla", "Sunny", "Cerato", "Tiguan"]
+def predict_price(values):
+    frame = pd.DataFrame([values]).reindex(columns=feature_columns)
+    transformed = preprocessor.transform(frame)
+    predicted_log = model.predict(transformed)[0]
+    prediction = float(np.expm1(predicted_log))
 
-    company_models = raw_df.loc[
-        raw_df["company"] == company_name,
-        "model"
-    ]
-
-    return clean_options(
-        company_models,
-        clean_options(raw_df["model"], ["Other"])
-    )
-
-
-def predict_price(input_data):
-    input_df = pd.DataFrame([input_data])
-    input_df = input_df.reindex(columns=feature_columns)
-
-    encoded = preprocessor.transform(input_df)
-    predicted_log_price = model.predict(encoded)[0]
-    predicted_price = float(np.expm1(predicted_log_price))
-
-    if not np.isfinite(predicted_price) or predicted_price <= 0:
+    if not np.isfinite(prediction) or prediction <= 0:
         raise ValueError("The model returned an invalid prediction.")
 
-    return predicted_price
+    return prediction
 
 
 try:
@@ -174,195 +85,282 @@ except Exception as error:
     st.error(str(error))
     st.stop()
 
-raw_df = load_dataset()
+raw_df = load_data()
+
+
+def models_for_company(company):
+    if raw_df is None or not {"company", "model"}.issubset(raw_df.columns):
+        return ["Elantra", "Corolla", "Sunny", "Cerato", "Tiguan"]
+
+    subset = raw_df.loc[raw_df["company"] == company, "model"]
+    return clean_options(subset, ["Other"])
+
 
 st.markdown(
-    '<div class="main-title">CarValue Egypt</div>',
-    unsafe_allow_html=True
+    """
+    <style>
+    .stApp {
+        background: #07111c;
+        color: white;
+    }
+
+    .block-container {
+        max-width: 1500px;
+        padding-top: 1.2rem;
+        padding-bottom: 2rem;
+    }
+
+    .hero {
+        padding: 1.6rem 1.8rem;
+        border-radius: 24px;
+        background:
+            radial-gradient(circle at top right, rgba(31, 146, 193, 0.35), transparent 35%),
+            linear-gradient(135deg, #0d2436, #081722);
+        border: 1px solid rgba(255,255,255,0.09);
+        margin-bottom: 1.2rem;
+    }
+
+    .hero-title {
+        font-size: 2.7rem;
+        font-weight: 850;
+        letter-spacing: -0.04em;
+    }
+
+    .hero-subtitle {
+        color: #a9bdcb;
+        font-size: 1rem;
+    }
+
+    .input-card {
+        background: #0d1d29;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 22px;
+        padding: 1.2rem;
+    }
+
+    .result-card {
+        background: linear-gradient(145deg, #0f6c91, #10364d);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 24px;
+        padding: 1.8rem;
+        text-align: center;
+        box-shadow: 0 24px 70px rgba(0,0,0,0.25);
+    }
+
+    .result-label {
+        color: #cce2ee;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.13em;
+    }
+
+    .result-price {
+        color: white;
+        font-size: 3rem;
+        font-weight: 850;
+        margin: 0.5rem 0;
+    }
+
+    .result-range {
+        color: #d8e8f0;
+    }
+
+    .stButton > button {
+        width: 100%;
+        min-height: 3.1rem;
+        border-radius: 13px;
+        border: none;
+        background: #1684b1;
+        color: white;
+        font-weight: 750;
+    }
+
+    .stButton > button:hover {
+        background: #1a99ca;
+        color: white;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 st.markdown(
-    '<div class="subtitle">A modern Egyptian used-car valuation experience.</div>',
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    '''
-    <div class="hero-card">
-        <b>Enter the vehicle details</b> to receive an estimated market value
-        from the tuned XGBoost model.
+    """
+    <div class="hero">
+        <div class="hero-title">🚘 CarValue Egypt</div>
+        <div class="hero-subtitle">
+            Estimate the Egyptian market value of a used car using your tuned XGBoost model.
+        </div>
     </div>
-    ''',
-    unsafe_allow_html=True
+    """,
+    unsafe_allow_html=True,
 )
-
-with st.sidebar:
-    st.header("Model snapshot")
-    st.metric("Best model", "Tuned XGBoost")
-    st.metric("R² on EGP scale", "0.8333")
-    st.metric("MAE", "≈ 119K EGP")
-    st.caption("Predictions are estimates, not guaranteed selling prices.")
 
 companies = clean_options(
-    raw_df["company"]
-    if raw_df is not None and "company" in raw_df.columns
-    else None,
-    ["Hyundai", "Kia", "Toyota", "Nissan", "BMW", "Mercedes"]
+    raw_df["company"] if raw_df is not None and "company" in raw_df.columns else None,
+    ["Hyundai", "Kia", "Toyota", "Nissan", "BMW", "Mercedes"],
 )
 
 colors = clean_options(
-    raw_df["color"]
-    if raw_df is not None and "color" in raw_df.columns
-    else None,
-    ["Black", "White", "Silver", "Gray", "Red", "Blue"]
+    raw_df["color"] if raw_df is not None and "color" in raw_df.columns else None,
+    ["Black", "White", "Silver", "Gray", "Red", "Blue"],
 )
 
 locations = clean_options(
-    raw_df["location"]
-    if raw_df is not None and "location" in raw_df.columns
-    else None,
-    ["Cairo", "Alexandria", "Giza", "6 October", "Nasr city"]
+    raw_df["location"] if raw_df is not None and "location" in raw_df.columns else None,
+    ["Cairo", "Alexandria", "Giza", "6 October"],
 )
 
-# Company and model stay outside the form so the model list updates instantly.
-st.subheader("Vehicle identity")
+form_col, result_col = st.columns([1.45, 1], gap="large")
 
-c1, c2, c3 = st.columns(3)
+with form_col:
+    st.subheader("Vehicle details")
 
-with c1:
-    company = st.selectbox(
-        "Company",
-        companies,
-        key="company_selector"
-    )
+    c1, c2, c3 = st.columns(3)
 
-company_models = models_for_company(company)
+    with c1:
+        company = st.selectbox("Company", companies)
 
-with c2:
-    car_model = st.selectbox(
-        "Model",
-        company_models,
-        key=f"model_selector_{company}"
-    )
-
-with c3:
-    year = st.number_input(
-        "Manufacturing year",
-        min_value=1972,
-        max_value=2026,
-        value=2020,
-        step=1
-    )
-
-with st.form("valuation_form"):
-    st.subheader("Usage and market details")
-
-    c4, c5, c6 = st.columns(3)
-
-    with c4:
-        mileage = st.number_input(
-            "Mileage (km)",
-            min_value=0,
-            max_value=1_000_000,
-            value=80_000,
-            step=5_000
+    with c2:
+        car_model = st.selectbox(
+            "Model",
+            models_for_company(company),
+            key=f"model_{company}",
         )
 
-    with c5:
-        color = st.selectbox("Color", colors)
-
-    with c6:
-        location = st.selectbox("Location", locations)
-
-    st.subheader("Transmission and equipment")
-
-    transmission = st.radio(
-        "Transmission",
-        ["Automatic", "Manual", "Unknown"],
-        horizontal=True
-    )
-
-    e1, e2, e3 = st.columns(3)
-
-    with e1:
-        air_conditioner = st.checkbox(
-            "Air conditioner",
-            value=True
+    with c3:
+        year = st.number_input(
+            "Manufacturing year",
+            min_value=1972,
+            max_value=2026,
+            value=2020,
+            step=1,
         )
 
-    with e2:
-        power_steering = st.checkbox(
-            "Power steering",
-            value=True
+    with st.form("car_form"):
+        c4, c5, c6 = st.columns(3)
+
+        with c4:
+            mileage = st.number_input(
+                "Mileage (km)",
+                min_value=0,
+                max_value=1_000_000,
+                value=80_000,
+                step=5_000,
+            )
+
+        with c5:
+            color = st.selectbox("Color", colors)
+
+        with c6:
+            location = st.selectbox("Location", locations)
+
+        transmission = st.radio(
+            "Transmission",
+            ["Automatic", "Manual", "Unknown"],
+            horizontal=True,
         )
 
-    with e3:
-        remote_control = st.checkbox(
-            "Remote control",
-            value=True
-        )
+        e1, e2, e3 = st.columns(3)
 
-    submitted = st.form_submit_button("Estimate market value")
+        with e1:
+            air_conditioner = st.checkbox("Air conditioner", value=True)
 
-if submitted:
-    car_age = max(0, 2026 - int(year))
+        with e2:
+            power_steering = st.checkbox("Power steering", value=True)
 
-    input_data = {
-        "company": company,
-        "model": car_model,
-        "mileage": int(mileage),
-        "color": color,
-        "transmission": transmission,
-        "location": location,
-        "listing_age_days": 0,
-        "air_conditioner": int(air_conditioner),
-        "automatic": int(transmission == "Automatic"),
-        "power_steering": int(power_steering),
-        "remote_control": int(remote_control),
-        "car_age": int(car_age),
-    }
+        with e3:
+            remote_control = st.checkbox("Remote control", value=True)
 
-    try:
-        estimated_price = predict_price(input_data)
+        submitted = st.form_submit_button("Estimate vehicle value")
 
-        mae_egp = 119_246
-        lower = max(0, estimated_price - mae_egp)
-        upper = estimated_price + mae_egp
 
-        st.markdown("<br>", unsafe_allow_html=True)
+with result_col:
+    st.subheader("Market estimate")
 
+    if not submitted:
         st.markdown(
-            f'''
-            <div class="result-card">
-                <div class="result-label">Estimated market value</div>
-                <div class="result-price">{estimated_price:,.0f} EGP</div>
-                <div class="result-range">
-                    Typical error band: {lower:,.0f} – {upper:,.0f} EGP
-                </div>
+            """
+            <div class="input-card">
+                <h3>Ready for valuation</h3>
+                <p>
+                    Enter the vehicle details and select its equipment,
+                    then click <b>Estimate vehicle value</b>.
+                </p>
             </div>
-            ''',
-            unsafe_allow_html=True
+            """,
+            unsafe_allow_html=True,
         )
 
         st.write("")
+        m1, m2 = st.columns(2)
+        m1.metric("Final model", "Tuned XGBoost")
+        m2.metric("R² on EGP scale", "0.8333")
 
-        m1, m2, m3, m4 = st.columns(4)
+        m3, m4 = st.columns(2)
+        m3.metric("MAE", "≈ 119K EGP")
+        m4.metric("Target", "Used-car price")
 
-        m1.metric("Vehicle", f"{company} {car_model}")
-        m2.metric("Car age", f"{car_age} years")
-        m3.metric("Mileage", f"{int(mileage):,} km")
-        m4.metric("Transmission", transmission)
+    else:
+        car_age = max(0, 2026 - int(year))
 
-        with st.expander("View model input"):
-            st.dataframe(
-                pd.DataFrame([input_data]),
-                use_container_width=True
+        input_data = {
+            "company": company,
+            "model": car_model,
+            "mileage": int(mileage),
+            "color": color,
+            "transmission": transmission,
+            "location": location,
+            "listing_age_days": 0,
+            "air_conditioner": int(air_conditioner),
+            "automatic": int(transmission == "Automatic"),
+            "power_steering": int(power_steering),
+            "remote_control": int(remote_control),
+            "car_age": int(car_age),
+        }
+
+        try:
+            estimate = predict_price(input_data)
+
+            mae = 119_246
+            lower = max(0, estimate - mae)
+            upper = estimate + mae
+
+            st.markdown(
+                f"""
+                <div class="result-card">
+                    <div class="result-label">Estimated market value</div>
+                    <div class="result-price">{estimate:,.0f} EGP</div>
+                    <div class="result-range">
+                        Typical range: {lower:,.0f} – {upper:,.0f} EGP
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
 
-        st.info(
-            "Trim level, engine size, condition, accident history, service "
-            "history, and other unavailable details may change the real price."
-        )
+            st.write("")
 
-    except Exception as error:
-        st.error(f"Prediction failed: {error}")
+            a, b = st.columns(2)
+            a.metric("Vehicle", f"{company} {car_model}")
+            b.metric("Car age", f"{car_age} years")
+
+            c, d = st.columns(2)
+            c.metric("Mileage", f"{int(mileage):,} km")
+            d.metric("Transmission", transmission)
+
+            with st.expander("View model input"):
+                st.dataframe(
+                    pd.DataFrame([input_data]),
+                    use_container_width=True,
+                )
+
+            st.info(
+                "Actual value may differ because trim level, engine size, "
+                "condition, accident history, and service history are unavailable."
+            )
+
+        except Exception as error:
+            st.error(f"Prediction failed: {error}")
+
+st.caption("© 2026 CarValue Egypt | Used Car Price Prediction")
