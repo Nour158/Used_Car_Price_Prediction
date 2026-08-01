@@ -33,18 +33,11 @@ FEATURE_COLUMNS_PATH = MODEL_DIR / "feature_columns.pkl"
 
 @st.cache_resource
 def load_artifacts():
-    required = [
-        MODEL_PATH,
-        PREPROCESSOR_PATH,
-        FEATURE_COLUMNS_PATH,
-    ]
-
+    required = [MODEL_PATH, PREPROCESSOR_PATH, FEATURE_COLUMNS_PATH]
     missing = [path.name for path in required if not path.exists()]
 
     if missing:
-        raise FileNotFoundError(
-            "Missing model files: " + ", ".join(missing)
-        )
+        raise FileNotFoundError("Missing model files: " + ", ".join(missing))
 
     model = joblib.load(MODEL_PATH)
     preprocessor = joblib.load(PREPROCESSOR_PATH)
@@ -96,11 +89,7 @@ def models_for_company(company_name):
     if raw_df is None or not {"company", "model"}.issubset(raw_df.columns):
         return ["Elantra", "Corolla", "Sunny", "Cerato", "Tiguan"]
 
-    subset = raw_df.loc[
-        raw_df["company"] == company_name,
-        "model",
-    ]
-
+    subset = raw_df.loc[raw_df["company"] == company_name, "model"]
     return clean_options(subset, ["Other"])
 
 
@@ -118,184 +107,330 @@ def predict_price(input_data):
     return predicted_price
 
 
+def gauge_geometry(estimate, mae):
+    """Work out the dial ceiling and needle angle for the result gauge."""
+    ceiling_candidates = [3_000_000, (estimate + mae) * 1.15]
+    gauge_max = max(ceiling_candidates)
+    gauge_max = np.ceil(gauge_max / 250_000) * 250_000
+
+    fraction = min(max(estimate / gauge_max, 0.0), 1.0)
+    angle_deg = -90 + 180 * fraction
+
+    return gauge_max, angle_deg
+
+
 # =========================================================
-# Styling
+# Styling — dashboard / instrument-cluster identity
 # =========================================================
+#
+# Token system:
+#   Ink        #161b22   (bezel, primary text)
+#   Paper      #f4efe4   (main surface — warm, not stark white)
+#   Amber      #f0a63a   (gauge sweep, primary accent, ignition glow)
+#   Teal       #1f6f78   (secondary accent, low-range gauge band)
+#   Redline    #d1483f   (high-range gauge band, used sparingly)
+#   Steel      #8f99a6   (muted labels, hairlines)
+#
+# Type:
+#   Space Grotesk  — display (hero, price readout)
+#   IBM Plex Sans  — body / UI labels
+#   IBM Plex Mono  — data, odometer-style numerals, spec tags
 
 st.markdown(
     """
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-    .stApp {
-        background: #f6f8fb;
-        color: #1d2735;
+    :root {
+        --ink: #161b22;
+        --ink-soft: #2a3341;
+        --paper: #f4efe4;
+        --paper-panel: #ffffff;
+        --amber: #f0a63a;
+        --teal: #1f6f78;
+        --redline: #d1483f;
+        --steel: #8f99a6;
+        --hairline: #e2dccb;
     }
 
-    .block-container {
-        max-width: 1480px;
-        padding-top: 1.1rem;
-        padding-bottom: 2.5rem;
+    .stApp { background: var(--paper); color: var(--ink); }
+    .block-container { max-width: 1400px; padding-top: 0.6rem; padding-bottom: 3rem; }
+
+    html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
+
+    /* ---------- Bezel / header ---------- */
+
+    .bezel {
+        background: var(--ink);
+        border-radius: 20px;
+        padding: 1.7rem 2rem 1.4rem;
+        margin-bottom: 1.1rem;
+        box-shadow: 0 18px 40px rgba(22, 27, 34, 0.35);
     }
 
-    .hero {
-        background: linear-gradient(135deg, #ffffff 0%, #eef4f8 100%);
-        border: 1px solid #dfe7ee;
-        border-radius: 26px;
-        padding: 1.7rem 1.9rem;
-        box-shadow: 0 16px 40px rgba(41, 57, 75, 0.08);
-        margin-bottom: 1.2rem;
+    .plate {
+        display: inline-block;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.72rem;
+        letter-spacing: 0.22em;
+        color: var(--amber);
+        border: 1px solid rgba(240, 166, 58, 0.45);
+        border-radius: 999px;
+        padding: 0.25rem 0.75rem;
+        margin-bottom: 0.7rem;
     }
 
     .hero-title {
-        font-size: 2.7rem;
-        font-weight: 900;
-        letter-spacing: -0.04em;
-        color: #15324b;
-        margin-bottom: 0.25rem;
+        font-family: 'Space Grotesk', sans-serif;
+        font-weight: 700;
+        font-size: 2.5rem;
+        letter-spacing: -0.02em;
+        color: #f6f3ea;
+        margin: 0 0 0.3rem;
     }
 
-    .hero-subtitle {
-        color: #667789;
-        font-size: 1.02rem;
+    .hero-sub {
+        color: #a9b3c1;
+        font-size: 0.98rem;
+        max-width: 640px;
+        margin-bottom: 1.3rem;
     }
 
-    .section-title {
-        color: #15324b;
-        font-size: 1.15rem;
-        font-weight: 850;
-        margin-bottom: 0.8rem;
+    .dial-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.9rem; }
+
+    .dial-card {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(240, 166, 58, 0.18);
+        border-radius: 14px;
+        padding: 0.8rem 0.95rem;
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+    }
+
+    .ring {
+        width: 42px; height: 42px; border-radius: 50%;
+        background: conic-gradient(var(--amber) calc(var(--pct) * 1%), rgba(255,255,255,0.12) 0);
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .ring::after {
+        content: ""; width: 30px; height: 30px; border-radius: 50%;
+        background: var(--ink);
+    }
+
+    .dial-label {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.68rem;
+        letter-spacing: 0.1em;
+        color: var(--steel);
+        text-transform: uppercase;
+    }
+
+    .dial-value {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #f6f3ea;
+        margin-top: 0.1rem;
+    }
+
+    /* ---------- Section labels (spec-plate style) ---------- */
+
+    .spec-tag {
+        display: inline-block;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.7rem;
+        letter-spacing: 0.14em;
+        color: var(--teal);
+        text-transform: uppercase;
+        border-bottom: 2px solid var(--teal);
+        padding-bottom: 0.15rem;
+        margin-bottom: 0.9rem;
     }
 
     .panel {
-        background: white;
-        border: 1px solid #e1e8ef;
-        border-radius: 22px;
-        padding: 1.2rem;
-        box-shadow: 0 10px 28px rgba(41, 57, 75, 0.06);
-    }
-
-    .summary-card {
-        background: #ffffff;
-        border: 1px solid #e1e8ef;
+        background: var(--paper-panel);
+        border: 1px solid var(--hairline);
         border-radius: 18px;
-        padding: 1rem 1.05rem;
-        box-shadow: 0 8px 20px rgba(41, 57, 75, 0.05);
+        padding: 1.3rem 1.4rem;
+        box-shadow: 0 8px 22px rgba(22, 27, 34, 0.05);
         height: 100%;
     }
 
-    .summary-label {
-        color: #7a8a9a;
-        font-size: 0.78rem;
-        font-weight: 750;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
+    /* ---------- Streamlit control overrides ---------- */
+
+    [data-testid="stWidgetLabel"] p {
+        color: var(--ink-soft) !important;
+        font-weight: 600 !important;
+        font-size: 0.86rem !important;
     }
 
-    .summary-value {
-        color: #15324b;
-        font-size: 1.35rem;
-        font-weight: 850;
-        margin-top: 0.25rem;
+    div[data-testid="stForm"] {
+        background: var(--paper-panel);
+        border: 1px solid var(--hairline);
+        border-radius: 18px;
+        padding: 1.3rem 1.4rem 0.6rem;
     }
+
+    div[data-testid="stFormSubmitButton"] button {
+        width: 100% !important;
+        min-height: 3.2rem !important;
+        border-radius: 999px !important;
+        border: 1px solid var(--amber) !important;
+        background: var(--amber) !important;
+        color: var(--ink) !important;
+        font-family: 'IBM Plex Mono', monospace !important;
+        font-size: 0.95rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.08em !important;
+        text-transform: uppercase !important;
+        box-shadow: 0 0 0 6px rgba(240, 166, 58, 0.14) !important;
+        transition: box-shadow 0.15s ease !important;
+    }
+
+    div[data-testid="stFormSubmitButton"] button:hover {
+        box-shadow: 0 0 0 9px rgba(240, 166, 58, 0.22) !important;
+    }
+
+    /* ---------- Result: gauge cluster ---------- */
 
     .result-shell {
-        background: white;
-        border: 1px solid #dfe7ee;
-        border-radius: 24px;
-        padding: 1.35rem;
-        box-shadow: 0 14px 34px rgba(41, 57, 75, 0.08);
+        background: var(--ink);
+        border-radius: 20px;
+        padding: 1.6rem 1.8rem;
+        box-shadow: 0 18px 40px rgba(22, 27, 34, 0.3);
     }
 
-    .price-card {
-        background: linear-gradient(135deg, #163b5b 0%, #205d7b 100%);
-        color: white;
-        border-radius: 22px;
-        padding: 1.7rem;
-        text-align: left;
+    .gauge-wrap {
+        width: 260px; height: 140px;
+        position: relative;
+        margin: 0.4rem auto 0.2rem;
+        overflow: hidden;
     }
 
-    .price-label {
-        color: #cfe2ec;
-        font-size: 0.82rem;
+    .gauge-dial {
+        width: 260px; height: 260px;
+        border-radius: 50%;
+        position: absolute; top: 0; left: 0;
+        background: conic-gradient(
+            from 180deg,
+            var(--teal) 0deg 60deg,
+            var(--amber) 60deg 130deg,
+            var(--redline) 130deg 180deg,
+            transparent 180deg 360deg
+        );
+    }
+
+    .gauge-hole {
+        width: 190px; height: 190px;
+        border-radius: 50%;
+        background: var(--ink);
+        position: absolute; top: 35px; left: 35px;
+    }
+
+    .gauge-needle {
+        position: absolute;
+        bottom: 0; left: 50%;
+        width: 3px; height: 118px;
+        background: #f6f3ea;
+        border-radius: 3px 3px 0 0;
+        transform-origin: bottom center;
+        margin-left: -1.5px;
+    }
+
+    .gauge-hub {
+        width: 14px; height: 14px; border-radius: 50%;
+        background: var(--amber);
+        position: absolute; bottom: -7px; left: 50%; margin-left: -7px;
+        box-shadow: 0 0 0 4px rgba(240, 166, 58, 0.2);
+    }
+
+    .odometer {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 2.1rem;
+        font-weight: 600;
+        color: #f6f3ea;
+        text-align: center;
+        letter-spacing: 0.02em;
+        margin-top: 0.4rem;
+    }
+
+    .odometer-unit {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.78rem;
+        color: var(--amber);
+        text-align: center;
+        letter-spacing: 0.18em;
         text-transform: uppercase;
-        letter-spacing: 0.1em;
-        font-weight: 750;
+        margin-bottom: 0.3rem;
     }
 
-    .price-value {
-        font-size: 3rem;
-        font-weight: 900;
-        margin: 0.35rem 0 0.5rem;
+    .range-readout {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.82rem;
+        color: #a9b3c1;
+        text-align: center;
+        margin-top: 0.5rem;
     }
 
-    .price-range {
-        color: #e3edf3;
-        font-size: 0.98rem;
+    /* ---------- Vehicle registration card ---------- */
+
+    .reg-card {
+        background: var(--paper-panel);
+        border: 1px solid var(--hairline);
+        border-radius: 18px;
+        padding: 1.3rem 1.4rem;
     }
 
-    .detail-grid {
+    .reg-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 0.7rem;
-        margin-top: 1rem;
+        gap: 0.6rem;
+        margin-top: 0.9rem;
     }
 
-    .detail-item {
-        background: #f8fafc;
-        border: 1px solid #e3e9ef;
-        border-radius: 14px;
-        padding: 0.85rem;
+    .reg-item {
+        background: var(--paper);
+        border: 1px solid var(--hairline);
+        border-radius: 12px;
+        padding: 0.7rem 0.8rem;
     }
 
-    .detail-label {
-        color: #7b8b9b;
-        font-size: 0.75rem;
+    .reg-label {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.66rem;
+        letter-spacing: 0.1em;
         text-transform: uppercase;
-        letter-spacing: 0.07em;
-        font-weight: 750;
+        color: var(--steel);
     }
 
-    .detail-value {
-        color: #1d3348;
-        font-size: 1rem;
-        font-weight: 800;
-        margin-top: 0.2rem;
+    .reg-value {
+        font-weight: 700;
+        color: var(--ink);
+        font-size: 0.98rem;
+        margin-top: 0.15rem;
     }
 
-    .empty-result {
-        background: white;
-        border: 1px dashed #cbd6df;
-        border-radius: 22px;
-        padding: 2rem 1.4rem;
+    /* ---------- Idle state ---------- */
+
+    .idle-shell {
+        background: var(--paper-panel);
+        border: 1px dashed #cbbf9e;
+        border-radius: 18px;
+        padding: 2.2rem 1.6rem;
         text-align: center;
-        color: #6f7f8f;
+        color: var(--steel);
     }
 
-    div[data-testid="stFormSubmitButton"] button,
-    div[data-testid="stButton"] button {
-        width: 100% !important;
-        min-height: 3.15rem !important;
-        border-radius: 13px !important;
-        border: 1px solid #1d5f7d !important;
-        background: #1d5f7d !important;
-        color: #ffffff !important;
-        font-size: 1rem !important;
-        font-weight: 800 !important;
-    }
+    .idle-shell .spec-tag { color: var(--steel); border-bottom-color: var(--steel); }
 
-    div[data-testid="stFormSubmitButton"] button *,
-    div[data-testid="stButton"] button * {
-        color: #ffffff !important;
-    }
-
-    div[data-testid="stFormSubmitButton"] button:hover,
-    div[data-testid="stButton"] button:hover {
-        background: #174d66 !important;
-        border-color: #174d66 !important;
-    }
-
-    [data-testid="stWidgetLabel"] {
-        color: #24384c !important;
-        font-weight: 750 !important;
+    .idle-lamp {
+        width: 10px; height: 10px; border-radius: 50%;
+        background: var(--steel);
+        display: inline-block;
+        margin-right: 0.4rem;
     }
     </style>
     """,
@@ -304,15 +439,40 @@ st.markdown(
 
 
 # =========================================================
-# Header
+# Header / bezel
 # =========================================================
 
 st.markdown(
     """
-    <div class="hero">
+    <div class="bezel">
+        <div class="plate">HATLA2EE DATASET · AUG 2025</div>
         <div class="hero-title">🚘 CarValue Egypt</div>
-        <div class="hero-subtitle">
-            Estimate the market value of a used car in Egypt using a tuned XGBoost model.
+        <div class="hero-sub">
+            A gauge cluster for used-car pricing — enter a vehicle's specs and
+            read its estimated market value straight off the dial.
+        </div>
+        <div class="dial-row">
+            <div class="dial-card">
+                <div class="ring" style="--pct: 83;"></div>
+                <div>
+                    <div class="dial-label">Fit (R²)</div>
+                    <div class="dial-value">0.833</div>
+                </div>
+            </div>
+            <div class="dial-card">
+                <div class="ring" style="--pct: 45;"></div>
+                <div>
+                    <div class="dial-label">Avg. Error</div>
+                    <div class="dial-value">≈ 119K EGP</div>
+                </div>
+            </div>
+            <div class="dial-card">
+                <div class="ring" style="--pct: 100;"></div>
+                <div>
+                    <div class="dial-label">Model</div>
+                    <div class="dial-value">Tuned XGBoost</div>
+                </div>
+            </div>
         </div>
     </div>
     """,
@@ -321,177 +481,85 @@ st.markdown(
 
 
 # =========================================================
-# Quick model summary
-# =========================================================
-
-s1, s2, s3, s4 = st.columns(4)
-
-summary_items = [
-    ("Model", "Tuned XGBoost"),
-    ("R² Score", "0.8333"),
-    ("Average Error", "≈ 119K EGP"),
-    ("Market", "Egypt"),
-]
-
-for column, (label, value) in zip([s1, s2, s3, s4], summary_items):
-    with column:
-        st.markdown(
-            f"""
-            <div class="summary-card">
-                <div class="summary-label">{label}</div>
-                <div class="summary-value">{value}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-st.write("")
-
-
-# =========================================================
 # Main workspace
 # =========================================================
 
 companies = clean_options(
-    raw_df["company"]
-    if raw_df is not None and "company" in raw_df.columns
-    else None,
+    raw_df["company"] if raw_df is not None and "company" in raw_df.columns else None,
     ["Hyundai", "Kia", "Toyota", "Nissan", "BMW", "Mercedes"],
 )
 
 colors = clean_options(
-    raw_df["color"]
-    if raw_df is not None and "color" in raw_df.columns
-    else None,
+    raw_df["color"] if raw_df is not None and "color" in raw_df.columns else None,
     ["Black", "White", "Silver", "Gray", "Red", "Blue"],
 )
 
 locations = clean_options(
-    raw_df["location"]
-    if raw_df is not None and "location" in raw_df.columns
-    else None,
+    raw_df["location"] if raw_df is not None and "location" in raw_df.columns else None,
     ["Cairo", "Alexandria", "Giza", "6 October"],
 )
 
 selection_col, options_col = st.columns([1.15, 1], gap="large")
 
 with selection_col:
-    st.markdown(
-        '<div class="section-title">Vehicle Selection</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    st.markdown('<span class="spec-tag">Vehicle ID</span>', unsafe_allow_html=True)
 
-    company = st.selectbox(
-        "Company",
-        companies,
-        key="company_selector",
-    )
+    company = st.selectbox("Company", companies, key="company_selector")
+    car_model = st.selectbox("Model", models_for_company(company), key=f"model_selector_{company}")
+    year = st.number_input("Manufacturing Year", min_value=1972, max_value=2026, value=2020, step=1)
 
-    car_model = st.selectbox(
-        "Model",
-        models_for_company(company),
-        key=f"model_selector_{company}",
-    )
-
-    year = st.number_input(
-        "Manufacturing Year",
-        min_value=1972,
-        max_value=2026,
-        value=2020,
-        step=1,
-    )
+    st.markdown("</div>", unsafe_allow_html=True)
 
 with options_col:
-    st.markdown(
-        '<div class="section-title">Market Details</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    st.markdown('<span class="spec-tag">Market Conditions</span>', unsafe_allow_html=True)
 
-    mileage = st.number_input(
-        "Mileage (km)",
-        min_value=0,
-        max_value=1_000_000,
-        value=80_000,
-        step=5_000,
-    )
+    mileage = st.number_input("Mileage (km)", min_value=0, max_value=1_000_000, value=80_000, step=5_000)
+    color = st.selectbox("Color", colors)
+    location = st.selectbox("Location", locations)
 
-    color = st.selectbox(
-        "Color",
-        colors,
-    )
-
-    location = st.selectbox(
-        "Location",
-        locations,
-    )
+    st.markdown("</div>", unsafe_allow_html=True)
 
 st.write("")
 
 with st.form("car_features_form"):
-    st.markdown(
-        '<div class="section-title">Transmission and Features</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<span class="spec-tag">Transmission &amp; Equipment</span>', unsafe_allow_html=True)
 
     transmission_col, features_col = st.columns([1, 1.5], gap="large")
 
     with transmission_col:
-        transmission = st.radio(
-            "Transmission",
-            ["Automatic", "Manual", "Unknown"],
-            horizontal=False,
-        )
+        transmission = st.radio("Transmission", ["Automatic", "Manual", "Unknown"], horizontal=False)
 
     with features_col:
         f1, f2, f3 = st.columns(3)
-
         with f1:
-            air_conditioner = st.checkbox(
-                "Air Conditioner",
-                value=True,
-            )
-
+            air_conditioner = st.checkbox("Air Conditioner", value=True)
         with f2:
-            power_steering = st.checkbox(
-                "Power Steering",
-                value=True,
-            )
-
+            power_steering = st.checkbox("Power Steering", value=True)
         with f3:
-            remote_control = st.checkbox(
-                "Remote Control",
-                value=True,
-            )
+            remote_control = st.checkbox("Remote Control", value=True)
 
-    submitted = st.form_submit_button(
-        "Estimate Market Value"
-    )
+    submitted = st.form_submit_button("▶  Estimate Market Value")
 
 
 # =========================================================
-# Result area
+# Result — gauge cluster
 # =========================================================
 
 st.write("")
-st.markdown(
-    '<div class="section-title">Valuation Result</div>',
-    unsafe_allow_html=True,
-)
 
 if not submitted:
     st.markdown(
         """
-        <div class="empty-result">
-            <h3>Ready when you are</h3>
-            <p>
-                Enter the car details above, then click
-                <b>Estimate Market Value</b>.
-            </p>
+        <div class="idle-shell">
+            <span class="spec-tag"><span class="idle-lamp"></span>Gauge Idle</span>
+            <h3 style="color:#3a4454; margin: 0.4rem 0 0.2rem;">Ready when you are</h3>
+            <p style="margin:0;">Fill in the vehicle specs above, then hit <b>Estimate Market Value</b> to bring the needle to life.</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
-
 else:
     car_age = max(0, 2026 - int(year))
 
@@ -512,22 +580,27 @@ else:
 
     try:
         estimate = predict_price(input_data)
-
         mae = 119_246
         lower = max(0, estimate - mae)
         upper = estimate + mae
+        gauge_max, angle_deg = gauge_geometry(estimate, mae)
 
-        result_left, result_right = st.columns([1.2, 1], gap="large")
+        result_left, result_right = st.columns([1, 1.1], gap="large")
 
         with result_left:
             st.markdown(
                 f"""
-                <div class="price-card">
-                    <div class="price-label">Estimated Market Value</div>
-                    <div class="price-value">{estimate:,.0f} EGP</div>
-                    <div class="price-range">
-                        Typical range: {lower:,.0f} – {upper:,.0f} EGP
+                <div class="result-shell">
+                    <div class="gauge-wrap">
+                        <div class="gauge-dial"></div>
+                        <div class="gauge-hole"></div>
+                        <div class="gauge-needle" style="transform: rotate({angle_deg:.1f}deg);"></div>
+                        <div class="gauge-hub"></div>
                     </div>
+                    <div class="odometer-unit">Estimated Market Value</div>
+                    <div class="odometer">{estimate:,.0f} EGP</div>
+                    <div class="range-readout">Typical range · {lower:,.0f} – {upper:,.0f} EGP</div>
+                    <div class="range-readout" style="margin-top:0.2rem; color:#6f7f8f;">Dial ceiling · {gauge_max:,.0f} EGP</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -536,38 +609,32 @@ else:
         with result_right:
             st.markdown(
                 f"""
-                <div class="result-shell">
-                    <div class="section-title">Vehicle Summary</div>
-
-                    <div class="detail-grid">
-                        <div class="detail-item">
-                            <div class="detail-label">Vehicle</div>
-                            <div class="detail-value">{company} {car_model}</div>
+                <div class="reg-card">
+                    <span class="spec-tag">Vehicle Summary</span>
+                    <div class="reg-grid">
+                        <div class="reg-item">
+                            <div class="reg-label">Vehicle</div>
+                            <div class="reg-value">{company} {car_model}</div>
                         </div>
-
-                        <div class="detail-item">
-                            <div class="detail-label">Year</div>
-                            <div class="detail-value">{int(year)}</div>
+                        <div class="reg-item">
+                            <div class="reg-label">Year</div>
+                            <div class="reg-value">{int(year)}</div>
                         </div>
-
-                        <div class="detail-item">
-                            <div class="detail-label">Mileage</div>
-                            <div class="detail-value">{int(mileage):,} km</div>
+                        <div class="reg-item">
+                            <div class="reg-label">Mileage</div>
+                            <div class="reg-value">{int(mileage):,} km</div>
                         </div>
-
-                        <div class="detail-item">
-                            <div class="detail-label">Transmission</div>
-                            <div class="detail-value">{transmission}</div>
+                        <div class="reg-item">
+                            <div class="reg-label">Transmission</div>
+                            <div class="reg-value">{transmission}</div>
                         </div>
-
-                        <div class="detail-item">
-                            <div class="detail-label">Location</div>
-                            <div class="detail-value">{location}</div>
+                        <div class="reg-item">
+                            <div class="reg-label">Location</div>
+                            <div class="reg-value">{location}</div>
                         </div>
-
-                        <div class="detail-item">
-                            <div class="detail-label">Car Age</div>
-                            <div class="detail-value">{car_age} years</div>
+                        <div class="reg-item">
+                            <div class="reg-label">Car Age</div>
+                            <div class="reg-value">{car_age} years</div>
                         </div>
                     </div>
                 </div>
@@ -582,10 +649,7 @@ else:
         )
 
         with st.expander("View model input"):
-            st.dataframe(
-                pd.DataFrame([input_data]),
-                use_container_width=True,
-            )
+            st.dataframe(pd.DataFrame([input_data]), use_container_width=True)
 
     except Exception as error:
         st.error(f"Prediction failed: {error}")
@@ -619,6 +683,4 @@ with st.expander("About this Project"):
 """
     )
 
-st.caption(
-    "© 2026 CarValue Egypt | Used Car Price Prediction"
-)
+st.caption("© 2026 CarValue Egypt | Used Car Price Prediction")
