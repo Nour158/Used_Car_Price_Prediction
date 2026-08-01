@@ -41,6 +41,15 @@ The application allows users to:
 * Choose location
 * Select available features
 * Receive an estimated market value
+* ## 🌐 Live Demo
+
+🚀 **Try the application here:**
+
+**https://usedcarpriceprediction-sdjdld72bg8vc4u8wdnpva.streamlit.app/**
+
+---
+
+
 
 ---
 
